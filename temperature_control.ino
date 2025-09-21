@@ -1,19 +1,17 @@
-// ===== Blynk Settings =====
-#define BLYNK_TEMPLATE_ID "TMPL6a4Grdiv2"
-#define BLYNK_TEMPLATE_NAME "Smart Stove Kit"
-#define BLYNK_AUTH_TOKEN    "CQ418r4ls_nughsmz6iNloT-g45pKRB9"
- 
-#define IN1 25
-#define EN1 26
-
 #include <max6675.h>
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
 #include <WiFi.h>
+
+// ===== ตั้งค่า Blynk =====
+#define BLYNK_TEMPLATE_ID "TMPL6a4Grdiv2"
+#define BLYNK_TEMPLATE_NAME "Smart Stove Kit"
+#define BLYNK_AUTH_TOKEN    "CQ418r4ls_nughsmz6iNloT-g45pKRB9"
+
 #include <BlynkSimpleEsp32.h>
-
-
-
+ 
+#define IN1 25
+#define EN1 26
 
 LiquidCrystal_I2C lcd(0x27, 16, 2);  
 int thermoSO = 19;                   
@@ -21,7 +19,7 @@ int thermoCS = 5;
 int thermoSCK = 18;                  
 MAX6675 thermocouple(thermoSCK, thermoCS, thermoSO);
 
-// ===== Wi-Fi =====
+// ===== ตั้งค่า Wi-Fi =====
 char ssid[] = "WPYM-COM 2.4G";
 char pass[] = "0817632661";
 
@@ -31,6 +29,23 @@ float targetTemp = 35.0;  // อุณหภูมิเป้าหมาย �
 int fanSpeed = 0;         // ความแรงของพัดลม (0-255)
 bool fanStatus = false;
 
+// ===== การตั้งค่าอุณหภูมิ =====
+const float MIN_TEMP = 35.0;   // อุณหภูมิต่ำสุดที่ตั้งได้
+const float MAX_TEMP = 200.0;  // อุณหภูมิสูงสุดที่ตั้งได้
+const float TEMP_BUFFER = 2.0; // ช่วงบัฟเฟอร์เพื่อป้องกันการเปิดปิดบ่อย
+
+// ===== ระดับความแรงพัดลม =====
+const int FAN_SPEED_MAX = 255;    // ความแรงสูงสุด 
+const int FAN_SPEED_HIGH = 220;   // ความแรงสูง 
+const int FAN_SPEED_MED = 200;    // ความแรงปานกลาง 
+const int FAN_SPEED_LOW = 180;    // ความแรงต่ำ
+const int FAN_SPEED_KEEP = 180;   // ความแรงรักษาระดับ 
+
+// ===== ช่วงความต่างอุณหภูมิ =====
+const float TEMP_DIFF_HIGH = 10.0;  // ความต่าง >= 10°C
+const float TEMP_DIFF_MED = 5.0;    // ความต่าง >= 5°C
+const float TEMP_DIFF_LOW = 2.0;    // ความต่าง >= 2°C
+
 void setup() {
   pinMode(dcfan, OUTPUT);
   Serial.begin(9600);
@@ -38,7 +53,7 @@ void setup() {
   lcd.init();       
   lcd.backlight();  
   lcd.setCursor(0, 0);
-  lcd.print("Smart Stove Kit");
+  lcd.print("Smart Temperatur");
   lcd.setCursor(0, 1);
   lcd.print("Starting...");
   
@@ -53,7 +68,11 @@ void setup() {
   Serial.println("System Ready!");
   Serial.print("Target Temperature: ");
   Serial.print(targetTemp);
-  Serial.println("°C");
+  Serial.print("°C (Range: ");
+  Serial.print(MIN_TEMP);
+  Serial.print("-");
+  Serial.print(MAX_TEMP);
+  Serial.println("°C)");
 }
 
 void loop() {
@@ -97,21 +116,21 @@ void controlFanByTemp() {
     fanStatus = true;
     
     // คำนวณความแรงของพัดลมตามความต่างของอุณหภูมิ
-    if (tempDiff >= 10) {
-      fanSpeed = 255;  // ความแรงสูงสุด
-    } else if (tempDiff >= 5) {
-      fanSpeed = 200;  // ความแรงปานกลาง-สูง
-    } else if (tempDiff >= 2) {
-      fanSpeed = 150;  // ความแรงปานกลาง
+    if (tempDiff >= TEMP_DIFF_HIGH) {
+      fanSpeed = FAN_SPEED_MAX;  // ความแรงสูงสุด
+    } else if (tempDiff >= TEMP_DIFF_MED) {
+      fanSpeed = FAN_SPEED_HIGH;  // ความแรงสูง
+    } else if (tempDiff >= TEMP_DIFF_LOW) {
+      fanSpeed = FAN_SPEED_MED;  // ความแรงปานกลาง
     } else {
-      fanSpeed = 100;  // ความแรงต่ำ
+      fanSpeed = FAN_SPEED_LOW;  // ความแรงต่ำ
     }
     
     digitalWrite(dcfan, HIGH);
     ledcWrite(EN1, fanSpeed);
     
-  } else if (tempC > targetTemp + 2) {
-    // อุณหภูมิสูงเกินเป้าหมาย (มี buffer 2°C) → ปิดพัดลม
+  } else if (tempC > targetTemp + TEMP_BUFFER) {
+    // อุณหภูมิสูงเกินเป้าหมาย (มี buffer) → ปิดพัดลม
     fanStatus = false;
     fanSpeed = 0;
     digitalWrite(dcfan, LOW);
@@ -120,7 +139,7 @@ void controlFanByTemp() {
   } else {
     // อุณหภูมิใกล้เป้าหมาย → ลดความแรงลง
     fanStatus = true;
-    fanSpeed = 80;  // ความแรงต่ำมาก เพื่อรักษาอุณหภูมิ
+    fanSpeed = FAN_SPEED_KEEP;  // ความแรงรักษาระดับ
     digitalWrite(dcfan, HIGH);
     ledcWrite(EN1, fanSpeed);
   }
@@ -129,7 +148,7 @@ void controlFanByTemp() {
 void updateDisplay() {
   lcd.clear();
   
-  // บรรทัดที่ 1: อุณหภูมิปัจจุบัน และ เป้าหมาย
+  // อุณหภูมิปัจจุบัน และ เป้าหมาย
   lcd.setCursor(0, 0);
   lcd.print("T:");
   lcd.print(tempC, 1);
@@ -137,7 +156,7 @@ void updateDisplay() {
   lcd.print(targetTemp, 0);
   lcd.print("C");
   
-  // บรรทัดที่ 2: สถานะพัดลม และ ความแรง
+  // สถานะพัดลม และ ความแรง
   lcd.setCursor(0, 1);
   lcd.print("Fan:");
   if (fanStatus) {
@@ -160,12 +179,16 @@ BLYNK_WRITE(V3) {
   float newTarget = param.asFloat();
   
   // ตรวจสอบช่วงอุณหภูมิที่สมเหตุสมผล
-  if (newTarget >= 35 && newTarget <= ) {
+  if (newTarget >= MIN_TEMP && newTarget <= MAX_TEMP) {
     targetTemp = newTarget;
     Serial.print("New target temperature set: ");
     Serial.print(targetTemp);
     Serial.println("°C");
   } else {
-    Serial.println("Invalid temperature range! (20-100°C)");
+    Serial.print("Invalid temperature range! (");
+    Serial.print(MIN_TEMP);
+    Serial.print("-");
+    Serial.print(MAX_TEMP);
+    Serial.println("°C)");
   }
 }
