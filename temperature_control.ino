@@ -1,3 +1,5 @@
+#include <SoftwareSerial.h>
+
 #include <max6675.h>
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
@@ -87,6 +89,11 @@ void loop() {
     delay(1000);
     return;
   }
+
+   // ส่งไป Blynk ทันทีทุกครั้ง (Real-time)
+  if (Blynk.connected()) {
+    Blynk.virtualWrite(V2, tempC);
+  }
   
   // ควบคุมพัดลมตามอุณหภูมิเป้าหมาย
   controlFanByTemp();
@@ -169,10 +176,10 @@ void updateDisplay() {
 }
 
 // ===== Blynk Functions =====
-BLYNK_READ(V2) {
-  // ส่งค่าอุณหภูมิปัจจุบันไปแอพ
-  Blynk.virtualWrite(V2, tempC);
-}
+// BLYNK_READ(V2) {
+//   // ส่งค่าอุณหภูมิปัจจุบันไปแอพ
+//   Blynk.virtualWrite(V2, tempC);
+// }
 
 BLYNK_WRITE(V3) {
   // รับค่าอุณหภูมิเป้าหมายจากแอพ
