@@ -212,24 +212,17 @@ void checkButtons() {
 void updateDisplay() {
   lcd.clear();
 
-  // อุณหภูมิปัจจุบัน และ เป้าหมาย
+  // อุณหภูมิปัจจุบัน
   lcd.setCursor(0, 0);
-  lcd.print("T:");
+  lcd.print("Temp: ");
   lcd.print(tempC, 1);
-  lcd.print(" G:");
-  lcd.print(targetTemp, 0);
-  lcd.print("C");
+  lcd.print(" C");
 
-  // สถานะพัดลม และ ความแรง
+  // อุณหภูมิที่ตั้ง
   lcd.setCursor(0, 1);
-  lcd.print("Fan:");
-  if (fanStatus) {
-    lcd.print("ON ");
-    lcd.print(map(fanSpeed, 0, 255, 0, 100));  // แสดงเปอร์เซ็นต์
-    lcd.print("%");
-  } else {
-    lcd.print("OFF   ");
-  }
+  lcd.print("Set : ");
+  lcd.print(targetTemp, 1);
+  lcd.print(" C");
 }
 
 // ===== Blynk Functions =====
