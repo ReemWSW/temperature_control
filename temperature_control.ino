@@ -48,6 +48,15 @@ const float TEMP_DIFF_HIGH = 10.0;  // ความต่าง >= 10°C
 const float TEMP_DIFF_MED = 5.0;    // ความต่าง >= 5°C
 const float TEMP_DIFF_LOW = 2.0;    // ความต่าง >= 2°C
 
+// ===== ปุ่มปรับอุณหภูมิ =====
+const int BUTTON_UP = 32;           // ปุ่มเพิ่มอุณหภูมิ
+const int BUTTON_DOWN = 33;         // ปุ่มลดอุณหภูมิ
+const float TEMP_STEP = 5.0;        // ปรับทีละ 5°C
+
+// Anti-bounce
+unsigned long lastButtonPress = 0;
+const unsigned long DEBOUNCE_DELAY = 200; // 200ms
+
 void setup() {
   pinMode(dcfan, OUTPUT);
   Serial.begin(9600);
@@ -62,7 +71,11 @@ void setup() {
   pinMode(IN1, OUTPUT);
   ledcAttach(EN1, 1000, 8);
   digitalWrite(IN1, HIGH);
-  
+
+  // ตั้งค่าปุ่ม
+  pinMode(BUTTON_UP, INPUT_PULLUP);
+  pinMode(BUTTON_DOWN, INPUT_PULLUP);
+
   // เชื่อมต่อ Blynk
   Blynk.begin(BLYNK_AUTH_TOKEN, ssid, pass);
   
@@ -95,9 +108,12 @@ void loop() {
     Blynk.virtualWrite(V2, tempC);
   }
   
+  // ตรวจสอบการกดปุ่ม
+  checkButtons();
+
   // ควบคุมพัดลมตามอุณหภูมิเป้าหมาย
   controlFanByTemp();
-  
+
   // แสดงผลบน LCD
   updateDisplay();
   
@@ -152,9 +168,50 @@ void controlFanByTemp() {
   }
 }
 
+void checkButtons() {
+  unsigned long currentTime = millis();
+
+  // ป้องกันกดซ้ำเร็วเกินไป
+  if (currentTime - lastButtonPress < DEBOUNCE_DELAY) {
+    return;
+  }
+
+  // ปุ่มเพิ่ม (กด = LOW เพราะใช้ INPUT_PULLUP)
+  if (digitalRead(BUTTON_UP) == LOW) {
+    targetTemp += TEMP_STEP;
+    if (targetTemp > MAX_TEMP) targetTemp = MAX_TEMP;
+
+    lastButtonPress = currentTime;
+    Serial.print("Button UP - New target: ");
+    Serial.print(targetTemp);
+    Serial.println("°C");
+
+    // ส่งไป Blynk
+    if (Blynk.connected()) {
+      Blynk.virtualWrite(V3, targetTemp);
+    }
+  }
+
+  // ปุ่มลด
+  if (digitalRead(BUTTON_DOWN) == LOW) {
+    targetTemp -= TEMP_STEP;
+    if (targetTemp < MIN_TEMP) targetTemp = MIN_TEMP;
+
+    lastButtonPress = currentTime;
+    Serial.print("Button DOWN - New target: ");
+    Serial.print(targetTemp);
+    Serial.println("°C");
+
+    // ส่งไป Blynk
+    if (Blynk.connected()) {
+      Blynk.virtualWrite(V3, targetTemp);
+    }
+  }
+}
+
 void updateDisplay() {
   lcd.clear();
-  
+
   // อุณหภูมิปัจจุบัน และ เป้าหมาย
   lcd.setCursor(0, 0);
   lcd.print("T:");
@@ -162,7 +219,7 @@ void updateDisplay() {
   lcd.print(" G:");
   lcd.print(targetTemp, 0);
   lcd.print("C");
-  
+
   // สถานะพัดลม และ ความแรง
   lcd.setCursor(0, 1);
   lcd.print("Fan:");
